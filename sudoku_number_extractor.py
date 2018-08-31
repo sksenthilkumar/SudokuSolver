@@ -1,35 +1,52 @@
 import cv2
 
-Display = True
-
-image_sudoku_original = cv2.imread('download.png')
-if Display:
-    cv2.imshow('image_sudoku_original', image_sudoku_original)
-
-
-#gray image
-image_sudoku_gray = cv2.cvtColor(image_sudoku_original,cv2.COLOR_BGR2GRAY)
-cv2.imshow('image_sudoku_gray', image_sudoku_gray)
-#adaptive threshold
-thresh = cv2.adaptiveThreshold(image_sudoku_gray,255,1,1,15,1)
-
-if Display:
-    cv2.imshow('thresh', thresh)
-
-__ , contours0,hierarchy = cv2.findContours( thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("-i", help="image location", default= 'images/sudoku.png')
+parser.add_argument("-s", help="Show_image_processing", default=True)
+args = parser.parse_args()
+image_name = args.i
+Display = args.s
 
 
-#copy the original image to show the posible candidate
-image_sudoku_candidates = image_sudoku_original.copy()
+def show_images(name, img):
+    if Display:
+        cv2.imshow(name, img)
+
+    cv2.waitKey()
+    cv2.destroyAllWindows()
 
 
+image_sudoku_original = cv2.imread(image_name)
+show_images('first', image_sudoku_original)
+
+gray = cv2.cvtColor(image_sudoku_original, cv2.COLOR_BGR2GRAY)
+gray = cv2.bilateralFilter(gray, 11, 17, 17)
+show_images('bilateralFilter', gray)
+
+thresh = cv2.adaptiveThreshold(gray,255,1,1,11,15)
+show_images('threshold', thresh)
+
+# applying canny edge detection doesn't work for finding the sudoku box
+#edged = cv2.Canny(thresh, 30, 200)
+#show_images('cannyEdge', edged)
+
+__ , contours, hierarchy = cv2.findContours(thresh.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+print(len(contours))
+contours = sorted(contours, key=cv2.contourArea, reverse=True)[:10]
+print(len(contours))
+
+rough_note = image_sudoku_original.copy()
+cv2.drawContours(rough_note, contours, -1, (0, 255, 0), 3)
+show_images('contours', rough_note)
 #biggest rectangle
 size_rectangle_max = 0
 big_rectangle = None
-for i in range(len(contours0)):
-    # aproximate countours to polygons
 
-    approximation = cv2.approxPolyDP(contours0[i], 4, True)
+for contour in contours:
+    # aproximate countours to polygons
+    perimeter = cv2.arcLength(contour, True)
+    approximation = cv2.approxPolyDP(contour, 0.02 * perimeter, True)
 
 
     # has the polygon 4 sides?
@@ -41,16 +58,13 @@ for i in range(len(contours0)):
         # area of the polygon
     size_rectangle = cv2.contourArea(approximation)
     # store the biggest
+
     if size_rectangle > size_rectangle_max:
         size_rectangle_max = size_rectangle
         big_rectangle = approximation
-#show the best candidate
-approximation = big_rectangle
-for i in range(len(approximation)):
-    cv2.line(image_sudoku_candidates,
-             (big_rectangle[(i%4)][0][0], big_rectangle[(i%4)][0][1]),
-             (big_rectangle[((i+1)%4)][0][0], big_rectangle[((i+1)%4)][0][1]),
-             (255, 0, 0), 2)
 
+rough_note = image_sudoku_original.copy()
+cv2.drawContours(rough_note, [big_rectangle], 0, (0, 255, 0), 3)
+show_images('Sudoku', rough_note)
 
 
